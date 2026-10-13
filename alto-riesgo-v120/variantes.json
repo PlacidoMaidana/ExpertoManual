@@ -1,0 +1,36 @@
+{
+  "00_Control": {},
+  "01_Sin_entradas_tendencia": {
+    "InpAllowTrendEntries": "false"
+  },
+  "02_SL_ATR_175": {
+    "InpTrendSLMult": "1.75",
+    "InpLateralSLMult": "1.75"
+  },
+  "03_SL_ATR_200": {
+    "InpTrendSLMult": "2.00",
+    "InpLateralSLMult": "2.00"
+  },
+  "04_Trailing_ATR_075": {
+    "InpTrendTrailingMult": "0.75",
+    "InpLateralTrailingMult": "0.75"
+  },
+  "05_Trailing_ATR_100": {
+    "InpTrendTrailingMult": "1.00",
+    "InpLateralTrailingMult": "1.00"
+  },
+  "06_Sin_etapa_1": {
+    "InpProteccionEtapa1TriggerR": "0.0"
+  },
+  "07_Sin_etapa_2": {
+    "InpProteccionEtapa2TriggerR": "0.0"
+  },
+  "08_Sin_etapa_3": {
+    "InpProteccionEtapa3TriggerR": "0.0"
+  },
+  "09_Etapas_mas_tardias": {
+    "InpProteccionEtapa1TriggerR": "0.30",
+    "InpProteccionEtapa2TriggerR": "0.60",
+    "InpProteccionEtapa3TriggerR": "1.00"
+  }
+}

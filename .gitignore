@@ -1,0 +1,17 @@
+# Binarios y salida de compilacion
+*.ex5
+*.log
+__pycache__/
+*.pyc
+# Datos personales y sesiones generadas
+*.csv
+*.bin
+*.png
+*.jpg
+*.zip
+datos-locales/
+outputs/
+Respaldo-local*/
+# Configuracion local y credenciales
+.env
+.env.*
