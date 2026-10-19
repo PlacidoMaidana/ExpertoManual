@@ -17,7 +17,14 @@ struct EvoMarketEvidence
    int broadSide,recentSide,recentHighs,recentLows,recentState;
    double recentHigh,recentLow;
    string layersDetail;
+   int recentBreakSide,recentBreakPhase;
+   datetime recentBreakTime;
+   double recentBreakLevel;
 };
+int EvoLiveDirection(const double displacementATR)
+{ return displacementATR>.05?1:displacementATR<-.05?-1:0; }
+int EvoLiveStrength(const double displacementATR)
+{ double magnitude=MathAbs(displacementATR); return magnitude>=2?3:magnitude>=1?2:magnitude>=.25?1:0; }
 int EvoEvidenceSign(const double value,const double threshold)
 { return value>threshold?1:value< -threshold?-1:0; }
 int EvoEvidenceMomentum(const double histATR,const double moveATR)
@@ -143,8 +150,12 @@ void EvoEvidenceConfirm(const MqlRates &rates[],const double atr,EvoMarketEviden
 string EvoEvidenceConfirmation(const EvoMarketEvidence &e)
 {
    if(!e.valid || e.referenceSide==0) return "CONFIRMACION: DATOS / ESTRUCTURA INSUFICIENTES";
-   string state=e.confirmation==3?"RUPTURA CONFIRMADA; POSIBLE REVERSION":e.confirmation==2?"RUPTURA POSIBLE; ESPERAR":e.confirmation==1?"RETROCESO POSIBLE; SIN RUPTURA":"CONTINUIDAD SIN RUPTURA";
-   return EvoEvidenceDirection(e.referenceSide)+": "+state;
+   string prior=" | estructura previa "+EvoEvidenceDirection(e.referenceSide);
+   string opposite=EvoEvidenceDirection(-e.referenceSide);
+   if(e.confirmation==3) return "RUPTURA "+opposite+" CONFIRMADA; POSIBLE GIRO"+prior;
+   if(e.confirmation==2) return "POSIBLE RUPTURA "+opposite+"; FALTA CONFIRMACION"+prior;
+   if(e.confirmation==1) return "MOVIMIENTO "+opposite+"; POSIBLE CORRECCION, SIN RUPTURA"+prior;
+   return "SIN RUPTURA CONTRARIA"+prior;
 }
 int EvoLayerState(const int side,const double previous,const double close,const double high,const double low,const double margin)
 {
@@ -176,7 +187,7 @@ void EvoEvidenceLayers(const MqlRates &rates[],const double atr,EvoMarketEvidenc
    e.layersDetail=StringFormat("Contexto amplio: pendiente del canal en %d cierres, desplazamiento minimo 0.25 ATR; no implica estructura vigente. Reciente: 24 cierres de referencia excluyendo los dos evaluados, dos maximos/minimos confirmados 2+2. Ultimo maximo %.5f; minimo %.5f. Confirmacion: dos cierres fuera del pivote + margen 0.10 ATR (%.5f). No exige MACD/ROC; se muestran aparte. Referencia movil, no tesis de entrada.",EvoChannelLookback,e.recentHigh,e.recentLow,.10*atr);
 }
 string EvoLayerBroad(const EvoMarketEvidence &e)
-{ return !e.valid?"CONTEXTO AMPLIO: N/D":"CANAL "+(string)EvoChannelLookback+": "+EvoEvidenceDirection(e.broadSide)+" | pendiente, no estructura"; }
+{ return !e.valid?"CONTEXTO AMPLIO: N/D":"CANAL "+(string)EvoChannelLookback+": "+(e.broadSide==0?"LATERAL / SIN PENDIENTE":EvoEvidenceDirection(e.broadSide))+" | canal principal"; }
 string EvoLayerRecent(const EvoMarketEvidence &e)
 { return !e.valid?"ESTRUCTURA RECIENTE: N/D":"ESTRUCTURA 24: "+(e.recentHighs<2 || e.recentLows<2?"PIVOTES INSUFICIENTES":EvoEvidenceDirection(e.recentSide))+((e.recentHigh>0 && e.recentLow>0)?StringFormat(" | > %.*f / < %.*f",_Digits,e.recentHigh+e.confirmationMargin,_Digits,e.recentLow-e.confirmationMargin):""); }
 string EvoLayerConfirmation(const EvoMarketEvidence &e)
@@ -186,6 +197,29 @@ string EvoLayerConfirmation(const EvoMarketEvidence &e)
    if(e.recentState==4) return "CONTINUACION LOCAL CONFIRMADA";
    if(e.recentState==1) return e.recentSide<0?"REBOTE ALCISTA AUN SIN CONFIRMAR":"RETROCESO BAJISTA AUN SIN RUPTURA";
    return "SIN NUEVA RUPTURA; VIGILAR PIVOTES";
+}
+void EvoRecentBreak(const MqlRates &rates[],const double atr,EvoMarketEvidence &e)
+{
+   int n=ArraySize(rates);
+   for(int i=n-8;i<n;i++)
+   {
+      double low=DBL_MAX,high=-DBL_MAX;
+      for(int j=i-24;j<i;j++) { low=MathMin(low,rates[j].low); high=MathMax(high,rates[j].high); }
+      int side=rates[i].close<low-.10*atr?-1:rates[i].close>high+.10*atr?1:0;
+      if(side==0) continue;
+      e.recentBreakSide=side; e.recentBreakTime=rates[i].time; e.recentBreakLevel=side<0?low:high;
+      e.recentBreakPhase=1;
+      for(int j=i+1;j<n;j++)
+      {
+         if(side*(rates[j-1].close-e.recentBreakLevel)>.10*atr && side*(rates[j].close-e.recentBreakLevel)>.10*atr) e.recentBreakPhase=2;
+      }
+      if(side*(rates[n-1].close-e.recentBreakLevel)<-.10*atr) e.recentBreakPhase=3;
+   }
+}
+string EvoRecentBreakText(const EvoMarketEvidence &e)
+{
+   if(!e.valid || e.recentBreakSide==0) return "RUPTURA RECIENTE: ninguna por cierre en 8 velas";
+   return StringFormat("RUPTURA %s %s | nivel %.*f | %s",e.recentBreakSide<0?"BAJISTA":"ALCISTA",TimeToString(e.recentBreakTime,TIME_MINUTES),_Digits,e.recentBreakLevel,e.recentBreakPhase==3?"NIVEL RECUPERADO":e.recentBreakPhase==2?"2 CIERRES FUERA":"1 CIERRE FUERA");
 }
 bool EvoReadMarketEvidence(const string symbol,const ENUM_TIMEFRAMES timeframe,const double atr,EvoMarketEvidence &e)
 {
@@ -209,6 +243,7 @@ bool EvoReadMarketEvidence(const string symbol,const ENUM_TIMEFRAMES timeframe,c
    EvoEvidenceChannel(rates,n-EvoChannelLookback,e);
    EvoEvidenceConfirm(rates,atr,e);
    EvoEvidenceLayers(rates,atr,e);
+   EvoRecentBreak(rates,atr,e);
    if(iTime(symbol,timeframe,1)!=bar) return false;
    e.bar=bar; e.valid=true;
    evoEvidenceCache=e; evoEvidenceCacheSymbol=symbol; evoEvidenceCachePeriod=timeframe;

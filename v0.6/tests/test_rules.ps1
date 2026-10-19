@@ -14,11 +14,17 @@ $source = $source.Replace('bool EvoSmartMayClose(', 'public static bool EvoSmart
 $source = $source.Replace('bool EvoSmartDeterioration(', 'public static bool EvoSmartDeterioration(')
 $source = $source.Replace('bool EvoBetter(', 'public static bool EvoBetter(').Replace('EvoProposal EvoPropose(', 'public static EvoProposal EvoPropose(')
 $source = $source.Replace('EvoProposal r;', 'EvoProposal r = new EvoProposal();')
+$source = $source.Replace('double EvoMissingStop(', 'public static double EvoMissingStop(').Replace('MathFloor(', 'Math.Floor(').Replace('MathCeil(', 'Math.Ceiling(')
 $source = $source.Replace('double EvoLossStop(', 'public static double EvoLossStop(')
 $test = @'
 public static int Run()
 {
     int count=0;
+    Check(EvoMissingStop(true,1.32614,1.32596,1.32610,.00019,1.5,.00050,.00001),1.32546); count++;
+    Check(EvoMissingStop(false,1.32614,1.32610,1.32624,.00019,1.5,.00050,.00001),1.32674); count++;
+    Check(EvoMissingStop(true,4200,4201,4201.2,4,1.5,.1,.01),4194); count++;
+    Check(EvoMissingStop(true,100,100,101,0,1,.1,.01),0); count++;
+
     var selected=new EvoProtection(); selected.incremental=true;
     selected.t1=0; selected.t2=.7; selected.s2=.05; selected.t3=0;
     Check(EvoPropose(true,100,110,90,10,10,0,selected).sl,100.5); count++;

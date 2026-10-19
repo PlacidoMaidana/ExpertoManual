@@ -1,7 +1,24 @@
-﻿#ifndef EVO_OPERATION_SIMULATOR
+#ifndef EVO_OPERATION_SIMULATOR
 #define EVO_OPERATION_SIMULATOR
 input group "Simulacion y entrada manual"
-input double EvoSimulationLots=0.01; // Volumen usado por simulacion y confirmacion
+input double EvoSimulationLots=0.01; // Volumen inicial; ajustable con microlotes en SIMULAR
+double evoSimLotsOverride=-1;
+double EvoSimLots() { return evoSimLotsOverride>=0?evoSimLotsOverride:EvoSimulationLots; }
+double EvoSimVolumeNext(const double current,const bool increase,const double minimum,const double maximum,const double step)
+{
+   if(step<=0 || minimum<=0 || maximum<minimum || !MathIsValidNumber(current)) return current;
+   double increment=MathCeil(0.01/step-1e-8)*step;
+   double next=current+(increase?increment:-increment);
+   return NormalizeDouble(MathMax(minimum,MathMin(MathFloor(maximum/step+1e-8)*step,MathRound(next/step)*step)),8);
+}
+void EvoSimChangeVolume(const bool increase)
+{
+   double old=EvoSimLots(),minimum=SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_MIN),maximum=SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_MAX),step=SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_STEP);
+   if(step<=0 || minimum<=0 || maximum<minimum) { EvoSimStatus("Sin limites de volumen validos del broker"); return; }
+   evoSimLotsOverride=EvoSimVolumeNext(old,increase,minimum,maximum,step);
+   EvoSimStatus(StringFormat("Volumen %.4f -> %.4f lotes. Revisa SL/TP y margen antes de CONFIRMAR.",old,EvoSimLots()));
+   EvoJournal("SIMULACION_VOLUMEN",0,StringFormat("anterior=%.8f; nuevo=%.8f; paso_broker=%.8f; no modifica posiciones ni pendientes",old,EvoSimLots(),step));
+}
 input int EvoSimulationPriceTolerancePoints=20; // Maximo cambio de entrada sin nueva revision
 input double EvoSimulationRiskTolerancePct=2.0; // Maximo aumento del riesgo estimado
 bool EvoSimWithinTolerance(const double distance,const double maxDistance,const double oldRisk,const double newRisk,const double riskPct)
@@ -77,13 +94,13 @@ void EvoSimLines()
 bool EvoSimValues(double &risk,double &gain,string &error)
 {
    double minLot=SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_MIN),maxLot=SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_MAX),step=SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_STEP);
-   if(!MathIsValidNumber(EvoSimulationLots) || step<=0 || EvoSimulationLots<minLot || EvoSimulationLots>maxLot || MathAbs(EvoSimulationLots/step-MathRound(EvoSimulationLots/step))>1e-7)
-   { error="Volumen no admitido por el simbolo; revisa EvoSimulationLots"; return false; }
+   if(!MathIsValidNumber(EvoSimLots()) || step<=0 || EvoSimLots()<minLot || EvoSimLots()>maxLot || MathAbs(EvoSimLots()/step-MathRound(EvoSimLots()/step))>1e-7)
+   { error="Volumen no admitido por el simbolo; ajusta microlotes en SIMULAR"; return false; }
    if(!evoSimActive || evoSimEntry<=0 || evoSimSL<=0 || evoSimTP<=0 || (evoSimBuy?(evoSimSL>=evoSimEntry || evoSimTP<=evoSimEntry):(evoSimSL<=evoSimEntry || evoSimTP>=evoSimEntry)))
    { error="Niveles invalidos: SL al lado de perdida y TP al de ganancia"; return false; }
    double pnl=0;
-   if(!OrderCalcProfit(evoSimBuy?ORDER_TYPE_BUY:ORDER_TYPE_SELL,_Symbol,EvoSimulationLots,evoSimEntry,evoSimSL,pnl) ||
-      !OrderCalcProfit(evoSimBuy?ORDER_TYPE_BUY:ORDER_TYPE_SELL,_Symbol,EvoSimulationLots,evoSimEntry,evoSimTP,gain))
+   if(!OrderCalcProfit(evoSimBuy?ORDER_TYPE_BUY:ORDER_TYPE_SELL,_Symbol,EvoSimLots(),evoSimEntry,evoSimSL,pnl) ||
+      !OrderCalcProfit(evoSimBuy?ORDER_TYPE_BUY:ORDER_TYPE_SELL,_Symbol,EvoSimLots(),evoSimEntry,evoSimTP,gain))
    { error="No se pudo calcular importe en moneda de cuenta"; return false; }
    risk=-pnl; return risk>0 && gain>0;
 }
@@ -137,7 +154,7 @@ void EvoSimConfirm()
    if(evoSimBuy?(evoSimSL>reference-gap || evoSimTP<reference+gap):(evoSimSL<reference+gap || evoSimTP>reference-gap))
    { EvoSimStatus("SL/TP demasiado cerca para el broker; ajusta las lineas"); return; }
    double margin=0;
-   if(!OrderCalcMargin(evoSimBuy?ORDER_TYPE_BUY:ORDER_TYPE_SELL,_Symbol,EvoSimulationLots,evoSimEntry,margin) || margin>AccountInfoDouble(ACCOUNT_MARGIN_FREE))
+   if(!OrderCalcMargin(evoSimBuy?ORDER_TYPE_BUY:ORDER_TYPE_SELL,_Symbol,EvoSimLots(),evoSimEntry,margin) || margin>AccountInfoDouble(ACCOUNT_MARGIN_FREE))
    { EvoSimStatus("Margen insuficiente o calculo no disponible"); return; }
    evoSimTrade.SetExpertMagicNumber(InpManageManualOnly?0:InpMagicToManage);
    evoSimTrade.SetDeviationInPoints(EvoSimulationPriceTolerancePoints); // Request no price deviation; execution mode may still allow slippage.
@@ -148,12 +165,12 @@ void EvoSimConfirm()
       if((SymbolInfoInteger(_Symbol,SYMBOL_EXPIRATION_MODE) & SYMBOL_EXPIRATION_GTC)==0)
       { EvoSimStatus("El simbolo no admite pendiente sin vencimiento (GTC)"); return; }
       evoSimTrade.SetTypeFilling(ORDER_FILLING_RETURN);
-      ok=evoSimTrade.OrderOpen(_Symbol,EvoSimOrderType(),EvoSimulationLots,0,evoSimEntry,evoSimSL,evoSimTP,ORDER_TIME_GTC,0,"Monitor pendiente");
+      ok=evoSimTrade.OrderOpen(_Symbol,EvoSimOrderType(),EvoSimLots(),0,evoSimEntry,evoSimSL,evoSimTP,ORDER_TIME_GTC,0,"Monitor pendiente");
    }
-   else ok=evoSimBuy?evoSimTrade.Buy(EvoSimulationLots,_Symbol,0,evoSimSL,evoSimTP,"Monitor entrada confirmada"):evoSimTrade.Sell(EvoSimulationLots,_Symbol,0,evoSimSL,evoSimTP,"Monitor entrada confirmada");
+   else ok=evoSimBuy?evoSimTrade.Buy(EvoSimLots(),_Symbol,0,evoSimSL,evoSimTP,"Monitor entrada confirmada"):evoSimTrade.Sell(EvoSimLots(),_Symbol,0,evoSimSL,evoSimTP,"Monitor entrada confirmada");
    uint rc=evoSimTrade.ResultRetcode();
    EvoSimStatus(StringFormat("Resultado %u: %s",rc,evoSimTrade.ResultRetcodeDescription()));
-   EvoJournal("ENTRADA_CONFIRMADA_SOLICITUD",evoSimTrade.ResultOrder(),StringFormat("lado=%s; lotes=%.4f; riesgo_est=%.2f; retorno=%u; enviada=%d",evoSimBuy?"BUY":"SELL",EvoSimulationLots,risk,rc,(int)ok));
+   EvoJournal("ENTRADA_CONFIRMADA_SOLICITUD",evoSimTrade.ResultOrder(),StringFormat("lado=%s; lotes=%.4f; riesgo_est=%.2f; retorno=%u; enviada=%d",evoSimBuy?"BUY":"SELL",EvoSimLots(),risk,rc,(int)ok));
    EvoJournal("TIPO_ENTRADA_SOLICITADA",evoSimTrade.ResultOrder(),StringFormat("tipo=%s; entrada=%.8f; SL=%.8f; TP=%.8f; retorno=%u",EvoSimModeName(),evoSimEntry,evoSimSL,evoSimTP,rc));
    bool accepted=ok && (rc==TRADE_RETCODE_DONE || rc==TRADE_RETCODE_PLACED || rc==TRADE_RETCODE_DONE_PARTIAL);
    if(accepted) { evoSimActive=false; ObjectsDeleteAll(0,"EVO_SIM_"); }
@@ -306,8 +323,16 @@ bool EvoSimDrawBrokerAmounts()
 }
 void EvoSimDraw()
 {
-   EvoPanelBackground(20); EvoDrawTabs();
-   EvoPanelLine(1,"SIMULACION | "+(evoSimBuy?"COMPRA":"VENTA")+StringFormat(" | %.4f lotes",EvoSimulationLots),clrAqua);
+   EvoPanelBackground(23); EvoDrawTabs();
+   EvoPanelLine(1,"SIMULACION | "+(evoSimBuy?"COMPRA":"VENTA")+StringFormat(" | %.4f lotes = %.2f microlotes",EvoSimLots(),EvoSimLots()/0.01),clrAqua);
+   double volumeStep=SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_STEP);
+   double volumeIncrement=volumeStep>0?MathCeil(0.01/volumeStep-1e-8)*volumeStep:0.01;
+   EvoSimAdjustButton("EVO_CONTEXT_SIM_VOLUME_MINUS",StringFormat("-%.2f microlote(s)",volumeIncrement/0.01),0,20);
+   EvoSimAdjustButton("EVO_CONTEXT_SIM_VOLUME_PLUS",StringFormat("+%.2f microlote(s)",volumeIncrement/0.01),1,20);
+   string volumeHelp="1 microlote = 0.01 lote. El paso se adapta al minimo incremento del broker. Este volumen se usa para importes, margen y orden confirmada; no lee el selector de un clic de MetaTrader ni cambia operaciones existentes.";
+   ObjectSetString(0,"EVO_CONTEXT_SIM_VOLUME_MINUS",OBJPROP_TOOLTIP,volumeHelp);
+   ObjectSetString(0,"EVO_CONTEXT_SIM_VOLUME_PLUS",OBJPROP_TOOLTIP,volumeHelp);
+   EvoPanelLine(22,"Volumen propio de SIMULAR; independiente del panel de MetaTrader.",clrGold);
    EvoSimButton("EVO_CONTEXT_SIDE",evoSimBuy?"LADO: COMPRA":"LADO: VENTA",0);
    EvoSimButton("EVO_CONTEXT_CALC","CALCULAR",1);
    EvoSimButton("EVO_CONTEXT_QUOTE","ACTUALIZAR",2);
@@ -388,6 +413,7 @@ bool EvoSimEvent(const int id,const string name)
    if(name=="EVO_CONTEXT_MIN") { evoPanelMinimized=!evoPanelMinimized; ObjectsDeleteAll(0,"EVO_CONTEXT_"); return true; }
    if(name=="EVO_CONTEXT_SIM") { evoSimulationView=!evoSimulationView; if(evoSimulationView) { EvoSetChartLinesVisible(true); if(evoSimActive) EvoSimLines(); } ObjectsDeleteAll(0,"EVO_CONTEXT_"); return true; }
    if(name=="EVO_CONTEXT_SIDE") { evoSimOrigin="Preparacion manual"; evoSimBuy=!evoSimBuy; evoSimMode=0; evoSimActive=false; ObjectsDeleteAll(0,"EVO_SIM_"); evoSimMessage="Lado cambiado: pulsa CALCULAR"; }
+   else if(name=="EVO_CONTEXT_SIM_VOLUME_MINUS" || name=="EVO_CONTEXT_SIM_VOLUME_PLUS") EvoSimChangeVolume(name=="EVO_CONTEXT_SIM_VOLUME_PLUS");
    else if(name=="EVO_CONTEXT_CALC") EvoSimCalculate();
    else if(name=="EVO_CONTEXT_QUOTE" || name=="EVO_CONTEXT_SIM_VALID") EvoSimUpdateQuote();
    else if(name=="EVO_CONTEXT_CONFIRM") EvoSimConfirm();

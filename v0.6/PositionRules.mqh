@@ -12,6 +12,13 @@ struct EvoProposal { double sl; bool close; string reason; };
 bool EvoBetter(const bool buy,const double oldSL,const double newSL)
 { return newSL>0 && (oldSL<=0 || (buy?newSL>oldSL:newSL<oldSL)); }
 
+double EvoMissingStop(const bool buy,const double entry,const double bid,const double ask,const double atr,const double multiplier,const double gap,const double tick)
+{
+   if(entry<=0 || bid<=0 || ask<=0 || atr<=0 || multiplier<=0 || tick<=0 || gap<0) return 0;
+   double requested=entry+(buy?-1:1)*atr*multiplier;
+   double legal=buy?MathMin(requested,bid-gap):MathMax(requested,ask+gap);
+   return buy?MathFloor(legal/tick)*tick:MathCeil(legal/tick)*tick;
+}
 double EvoLossStop(const bool buy,const double entry,const double price,const double sl,
                    const double atr,const double multiplier,const double step)
 {

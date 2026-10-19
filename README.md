@@ -1,13 +1,13 @@
 # ExpertoManual
 
-Estado de continuidad al **13 de octubre de 2026**. Este repositorio conserva dos proyectos actuales, con sus fuentes y dependencias:
+Estado de desarrollo local al **19 de octubre de 2026**. Este repositorio conserva dos proyectos, con sus fuentes y dependencias:
 
 | Proyecto | Archivo principal | Dependencias / presets |
 |---|---|---|
-| Gestor manual | `Gestor Monitor Evolucion v0.6.mq5` | `v0.6/`, `v0.6/sets/` |
+| Gestor manual actual | `Gestor Monitor Evolucion v0.8.mq5` | `v0.6/`, `v0.6/sets/` |
 | Asesor de alternativas | `SignalFusion ORO Alternativas v1.20.mq5` | `alto-riesgo-v120/`, `alto-riesgo-v120/sets/` |
 
-El gestor conserva el nombre de archivo v0.6; su propiedad interna de compilación es 1.60. No son dos asesores diferentes.
+Se conservan los gestores v0.6 (versión interna 1.60), v0.7 (1.70) y v0.8 (1.80). v0.7 incorpora los paneles visuales de análisis/tesis; v0.8 agrega el simulador con campos ATR y gestión por ticket. Elegir una versión por gráfico, no cargar ambas para gestionar la misma posición. Las dependencias compartidas conservan la carpeta v0.6.
 
 ## Instalar y compilar
 
@@ -43,6 +43,10 @@ Ejecutar las pruebas PowerShell de `v0.6/tests/`. Algunas pruebas Python produce
 ## Documentación
 
 - [Manual actual](documentacion/MANUAL-ACTUAL.md): guía vigente y límites.
+- [Simulador v0.8](documentacion/SIMULADOR-v0.8.md): entradas, campos ATR, modificación, cierre y cancelación.
+- [Panel de análisis v0.7](documentacion/PANEL-ANALISIS-v0.7.md) y [Estocástico/SAR](documentacion/STOCH-SAR-v0.7.md).
+- [Salud de posición visual](documentacion/TESIS-VISUAL-v0.7.md).
+- [Compartir Markdown en memoria](documentacion/COMPARTIR-MARKDOWN.md): copia de indicadores, tesis e informe ANALIZAR; variante opcional Portapapeles.
 - [Continuar desarrollo](documentacion/CONTINUAR.md): estado, verificaciones y pendientes.
 - [Alternativas v1.20](alto-riesgo-v120/LEEME.md): presets y comparaciones de esa versión.
 - `Proyecto/`: especificaciones recientes de patrones, Onda 3, contexto y controles.

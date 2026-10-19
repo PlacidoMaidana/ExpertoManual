@@ -41,7 +41,9 @@ struct EvoSnapshot
    double bbLower,bbMiddle,bbUpper,bbPreviousLower,bbPreviousUpper;
    bool bbValid,bbPreviousValid;
    EvoFrameContext mtf[3];
-   double obv, obvDelta, obvPriceDelta;
+   double obv, obvDelta, obvPriceDelta,obvVolumeSum;
+   bool stochValid,sarValid;
+   double stochK,stochD,stochPreviousK,stochPreviousD,sar,sarPrevious,sarClose,sarPreviousClose;
    bool obvValid;
    MqlRates current, confirmed, previous;
    bool closedView; // Arrays start at shift 1 for a fully closed snapshot.
@@ -270,6 +272,7 @@ class CEvoAnalysis
 private:
    CEvoMultiTimeframe higher;
    int handles[11];
+   int visualStoch,visualSAR;
    string symbol;
    ENUM_TIMEFRAMES timeframe;
    bool Read(const int h,const int buffer,const int shift,double &v)
@@ -278,10 +281,28 @@ private:
       if(CopyBuffer(h,buffer,shift,1,x)!=1) return false;
       v=x[0]; return MathIsValidNumber(v) && v!=EMPTY_VALUE;
    }
+   void ReadVisualClosed(EvoSnapshot &s)
+   {
+      s.stochValid=false; s.sarValid=false;
+#ifdef EVO_ANALYSIS_DASHBOARD_VERSION
+      datetime bar=iTime(symbol,timeframe,1);
+      s.stochValid=visualStoch!=INVALID_HANDLE && BarsCalculated(visualStoch)>=20 &&
+         Read(visualStoch,0,1,s.stochK) && Read(visualStoch,1,1,s.stochD) &&
+         Read(visualStoch,0,2,s.stochPreviousK) && Read(visualStoch,1,2,s.stochPreviousD) &&
+         s.stochK>=0 && s.stochK<=100 && s.stochD>=0 && s.stochD<=100 &&
+         s.stochPreviousK>=0 && s.stochPreviousK<=100 && s.stochPreviousD>=0 && s.stochPreviousD<=100;
+      MqlRates rates[]; ArraySetAsSeries(rates,true);
+      s.sarValid=visualSAR!=INVALID_HANDLE && BarsCalculated(visualSAR)>=3 &&
+         Read(visualSAR,0,1,s.sar) && Read(visualSAR,0,2,s.sarPrevious) &&
+         s.sar>0 && s.sarPrevious>0 && CopyRates(symbol,timeframe,1,2,rates)==2;
+      if(s.sarValid) { s.sarClose=rates[0].close; s.sarPreviousClose=rates[1].close; s.sarValid=rates[0].time==bar; }
+      if(bar<=0 || iTime(symbol,timeframe,1)!=bar) { s.stochValid=false; s.sarValid=false; }
+#endif
+   }
 public:
-   CEvoAnalysis() { for(int i=0;i<11;i++) handles[i]=INVALID_HANDLE; }
+   CEvoAnalysis() { visualStoch=INVALID_HANDLE; visualSAR=INVALID_HANDLE; for(int i=0;i<11;i++) handles[i]=INVALID_HANDLE; }
    bool ATR(double &value) { return Read(handles[0],0,0,value) && value>0; }
-   void Release() { higher.Release(); for(int i=0;i<11;i++) { if(handles[i]!=INVALID_HANDLE) IndicatorRelease(handles[i]); handles[i]=INVALID_HANDLE; } }
+   void Release() { higher.Release(); if(visualStoch!=INVALID_HANDLE) IndicatorRelease(visualStoch); if(visualSAR!=INVALID_HANDLE) IndicatorRelease(visualSAR); visualStoch=INVALID_HANDLE; visualSAR=INVALID_HANDLE; for(int i=0;i<11;i++) { if(handles[i]!=INVALID_HANDLE) IndicatorRelease(handles[i]); handles[i]=INVALID_HANDLE; } }
    bool Init(const string sym,const ENUM_TIMEFRAMES tf)
    {
       Release(); symbol=sym; timeframe=tf;
@@ -300,6 +321,11 @@ public:
       higher.Init(sym);
       handles[10]=iOBV(sym,tf,EvoOBVVolume);
       if(EvoUseOBVFilter && handles[10]==INVALID_HANDLE) { Release(); return false; }
+#ifdef EVO_ANALYSIS_DASHBOARD_VERSION
+      // Optional visual context: unavailable indicators do not block management.
+      visualStoch=iStochastic(sym,tf,14,3,3,MODE_SMA,STO_LOWHIGH);
+      visualSAR=iSAR(sym,tf,0.02,0.20);
+#endif
       return true;
    }
    // Independent closed-bar view for alerts; never replaces the live trading snapshot.
@@ -385,10 +411,12 @@ public:
          for(int j=0;j<EvoOBVLookback;j++)
             volumeSum+=(double)(EvoOBVVolume==VOLUME_REAL?obvBars[j].real_volume:obvBars[j].tick_volume);
          s.obvValid=volumeSum>0;
+         s.obvVolumeSum=volumeSum;
          s.obvDelta=s.obv-obvOlder;
          s.obvPriceDelta=obvBars[0].close-obvBars[EvoOBVLookback].close;
       }
       for(int frame=0;frame<3;frame++) higher.Update(frame,s.mtf[frame]);
+      ReadVisualClosed(s);
       EvoEvaluate(s,SymbolInfoDouble(symbol,SYMBOL_POINT));
       EvoFillLocalRegime(s,symbol,timeframe,false);
       return true;

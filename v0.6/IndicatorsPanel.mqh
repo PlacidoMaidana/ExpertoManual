@@ -122,6 +122,8 @@ void EvoIndicatorsDraw(const bool valid,const EvoSnapshot &s,const bool manual)
    ObjectDelete(0,"EVO_CONTEXT_PAGE");
    EvoPanelBackground(manual?evoMonitorControlRow+evoPanelExtraRows:evoRiskStart);
    EvoDrawTabs();
+   EvoTextRemember(s,valid);
+   EvoTextButton(1);
    EvoPanelLine(1,"INDICADORES | "+_Symbol+" | "+EnumToString(_Period)+(evoPanelFrozen?" | FIJADO":" | cierres"),clrWhite);
    EvoIndicatorsButton("EVO_CONTEXT_IND_PREV","< ANTERIOR",0);
    EvoIndicatorsButton("EVO_CONTEXT_IND_NEXT","SIGUIENTE >",1);

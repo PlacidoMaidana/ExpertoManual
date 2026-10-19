@@ -283,8 +283,22 @@ void EvoDemandCapture()
    EvoReportAdd("Este informe no cambia filtros, gestion ni abre posiciones.");
    EvoReportAdd("TACTICA: setup base + impulso; ANALIZAR exige ademas nivel/vela/espacio/MTF.");
    EvoReportAdd("SL/TP del informe son teoricos. SIMULAR usa su propio plan.",clrGold);
+#ifndef EVO_PANEL_MEMORY_REPORT_VERSION
    EvoReportSave();
+#endif
    EvoJournal("ANALISIS_SOLICITADO",0,evoReportAction+"; informe="+evoReportFile);
+}
+string EvoDemandMarkdown()
+{
+   string report="# Informe avanzado solicitado - ANALIZAR\r\n";
+   report+="Simbolo: "+_Symbol+" | temporalidad: "+EnumToString(_Period)+" | programa: "+MQLInfoString(MQL_PROGRAM_NAME)+"\r\n";
+   report+="Fecha de lectura (servidor): "+(evoDemandTime>0?TimeToString(evoDemandTime,TIME_DATE|TIME_SECONDS):"N/D")+"\r\n";
+   report+="Copia generada (servidor): "+TimeToString(TimeCurrent(),TIME_DATE|TIME_SECONDS)+"\r\n";
+   report+="Estado: "+(evoDemandValid?"informe disponible":"datos incompletos o no disponibles")+" | sugerencia: "+evoReportAction+"\r\n";
+   report+="Fuente: informe fijo generado al pulsar ANALIZAR. Se copian todas las paginas originales, sin recalcular ni mezclar con el tablero ANALISIS.\r\n\r\n## Informe completo\r\n";
+   for(int i=0;i<ArraySize(evoReportLines);i++) report+=evoReportLines[i]+"\r\n";
+   report+="\r\n## Metodo de copia\r\nTexto en memoria; no guarda TXT ni envia datos externos. Copiar no actualiza el informe. Pulsar ANALIZAR para otra lectura. En el probador las fechas son simuladas.\r\n";
+   return report;
 }
 int EvoReportPageSize() { return MathMax(3,MathMin(16,((int)ChartGetInteger(0,CHART_HEIGHT_IN_PIXELS)-30)/MathMax(18,EvoPanelFont+12)-7)); }
 void EvoDemandDraw()
@@ -305,12 +319,22 @@ void EvoDemandDraw()
    EvoSimButton("EVO_CONTEXT_REPORT_PREV","< ANTERIOR",0);
    EvoSimButton("EVO_CONTEXT_REPORT_NEXT","SIGUIENTE >",1);
    EvoSimButton("EVO_CONTEXT_REPORT_HOME","RESUMEN",2);
+#ifdef EVO_PANEL_MEMORY_REPORT_VERSION
+   EvoSimButton("EVO_CONTEXT_REPORT_COPY_MD","COPIAR MD",3);
+   ObjectSetInteger(0,"EVO_CONTEXT_REPORT_COPY_MD",OBJPROP_BGCOLOR,C'25,75,130');
+   ObjectSetString(0,"EVO_CONTEXT_REPORT_COPY_MD",OBJPROP_TOOLTIP,"COPIAR MARKDOWN: incluye todo el informe de ANALIZAR, no solo la pagina visible. Sin guardar TXT y sin recalcular. Copia directa en variante Portapapeles; texto seleccionable en version normal.");
+#else
    EvoSimButton("EVO_CONTEXT_REPORT_FILE","RUTA TXT",3);
+#endif
    EvoPanelLine(3,"SUGERENCIA: "+evoReportAction,clrGold,true);
    EvoPanelLine(4,StringFormat("Pagina %d/%d | %s | lectura fija",evoReportPage+1,pages,TimeToString(evoDemandTime,TIME_SECONDS)),clrAqua);
    for(int i=0;i<size;i++) { int at=evoReportPage*size+i; if(at<ArraySize(lines)) EvoPanelLine(5+i,lines[at],colors[at]); }
    EvoPanelLine(5+size,"ANALIZAR actualiza | paginas no recalculan",clrAqua);
+#ifdef EVO_PANEL_MEMORY_REPORT_VERSION
+   EvoPanelLine(6+size,"COPIAR MD comparte todas las paginas en memoria, sin TXT",clrSilver);
+#else
    EvoPanelLine(6+size,evoReportFile!=""?"TXT guardado en carpeta comun (RUTA TXT)":"Sin informe guardado",clrSilver);
+#endif
 }
 bool EvoDemandEvent(const int id,const string name)
 {
@@ -318,6 +342,9 @@ bool EvoDemandEvent(const int id,const string name)
    if(name=="EVO_CONTEXT_REPORT_PREV") evoReportPage--;
    if(name=="EVO_CONTEXT_REPORT_NEXT") evoReportPage++;
    if(name=="EVO_CONTEXT_REPORT_HOME") evoReportPage=0;
+#ifdef EVO_PANEL_MEMORY_REPORT_VERSION
+   if(name=="EVO_CONTEXT_REPORT_COPY_MD") EvoTextPresentMarkdown(EvoDemandMarkdown());
+#endif
    if(name=="EVO_CONTEXT_REPORT_FILE") Print(evoReportFile!=""?"Informe: "+TerminalInfoString(TERMINAL_COMMONDATA_PATH)+"\\Files\\"+evoReportFile:"Aun no hay informe guardado");
    ObjectSetInteger(0,name,OBJPROP_STATE,false); return true;
 }

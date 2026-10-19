@@ -175,7 +175,9 @@ private:
          double limit=buy?MathFloor((q.bid-gap)/tick+1e-8)*tick:MathCeil((q.ask+gap)/tick-1e-8)*tick;
          sl=NormalizeDouble(buy?MathMin(sl,limit):MathMax(sl,limit),(int)SymbolInfoInteger(symbol,SYMBOL_DIGITS));
       }
-      if(sl<=0 || (old>0 && (MathAbs(sl-old)<tick*0.5 || !EvoBetter(buy,old,sl)))) return false;
+      bool sameSL=old>0 && MathAbs(sl-old)<tick*0.5;
+      double oldTP=PositionGetDouble(POSITION_TP);
+      if(sl<=0 || (old>0 && !sameSL && !EvoBetter(buy,old,sl)) || (sameSL && MathAbs(tp-oldTP)<tick*0.5)) return false;
       if(buy?(sl>q.bid-gap):(sl<q.ask+gap)) { Warn(ticket,"SL fuera de stops/freeze; se conserva la propuesta tecnica"); return false; }
       if(tp>0 && (buy?tp<q.bid+gap:tp>q.ask-gap)) { Warn(ticket,"TP dentro de stops/freeze"); return false; }
       bool ok=trader.PositionModify(ticket,sl,tp);
@@ -258,7 +260,14 @@ public:
       if(risk<=0 && sl>0 && sign*(entry-sl)>0)
       { risk=sign*(entry-sl); GlobalVariableSet(key,risk); }
       double targetSL=sl, targetTP=tp;
-      if(sl<=0 && EvoSetMissingSL) targetSL=entry-sign*atr*EvoSLATR;
+      if(sl<=0 && EvoSetMissingSL)
+      {
+         double gap=(double)MathMax(SymbolInfoInteger(symbol,SYMBOL_TRADE_STOPS_LEVEL),SymbolInfoInteger(symbol,SYMBOL_TRADE_FREEZE_LEVEL))*point+2*tick;
+         targetSL=NormalizeDouble(EvoMissingStop(buy,entry,q.bid,q.ask,atr,EvoSLATR,gap,tick),(int)SymbolInfoInteger(symbol,SYMBOL_DIGITS));
+         if(targetSL<=0) { Warn(ticket,"SL inicial no calculable con restricciones broker"); return; }
+         if(sign*(entry-targetSL)>atr*EvoSLATR+tick)
+            Warn(ticket,StringFormat("SL inicial ampliado por minimo broker: distancia ATR %.8f -> legal %.8f; riesgo monetario mayor que propuesta ATR",atr*EvoSLATR,sign*(entry-targetSL)));
+      }
       double initialRisk=targetSL>0?sign*(entry-targetSL):0;
       if(tp<=0 && EvoSetMissingTP && (EvoTPMode==EVO_TP_ATR || risk>0 || initialRisk>0))
          targetTP=NormalizeDouble(MathRound((entry+sign*EvoTargetDistance(EvoTPMode==EVO_TP_ATR,atr,EvoTPATR,(risk>0?risk:initialRisk),EvoRR))/tick)*tick,(int)SymbolInfoInteger(symbol,SYMBOL_DIGITS));

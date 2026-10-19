@@ -12,6 +12,8 @@ __pycache__/
 datos-locales/
 outputs/
 Respaldo-local*/
+# Informe privado de operaciones (se conserva solo en el equipo)
+documentacion/analisis-20261014/
 # Configuracion local y credenciales
 .env
 .env.*

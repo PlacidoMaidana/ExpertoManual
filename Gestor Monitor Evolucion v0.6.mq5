@@ -85,10 +85,11 @@ void RenderMonitor(const bool force=false)
    EvoPanelInit();
    evoPanelExtraRows=4+(InpShowBreakEvenJumpButton?1:0)+(InpUseLossExitButton?1:0)+(evoLevelsExpanded?11:1);
    if(EvoShowContext && evoPanelMinimized) { EvoPanelDrawMinimized(EvoManagePositions); return; }
-   evoRiskStart=evoPanelTab==EVO_TAB_INDICADORES?EvoIndicatorsRiskRow(ManualStop>0):evoPanelTab==EVO_TAB_TACTICA?18:evoPanelTab==EVO_TAB_ALERTAS?15:evoPanelTab==EVO_TAB_ANALISIS?29:26;
+   evoRiskStart=evoPanelTab==EVO_TAB_INDICADORES?EvoIndicatorsRiskRow(ManualStop>0):evoPanelTab==EVO_TAB_TACTICA?22:evoPanelTab==EVO_TAB_ALERTAS?15:evoPanelTab==EVO_TAB_ANALISIS?32:26;
    evoMonitorControlRow=evoRiskStart+(ManualStop>0?7:3);
    if(evoPanelTab!=EVO_TAB_TACTICA && !evoLevelsExpanded) { evoPanelExtraRows=0; evoMonitorControlRow=0; }
    EvoBeginFrame();
+   if(EvoShowContext && evoHelpOpen) { EvoHelpDraw(); EvoEndFrame(); return; }
    if(EvoShowContext && evoPanelTab==EVO_TAB_REGISTRO && !evoSimulationView && !evoPanelMinimized && !evoDemandView) { EvoLogDraw(); EvoEndFrame(); return; }
    ObjectsDeleteAll(0,"EVO_CONTEXT_LOG_");
    if(EvoShowContext && evoSimulationView)
@@ -171,6 +172,7 @@ void OnTick() { Refresh(); }
 void OnTimer() { Refresh(); }
 void OnChartEvent(const int id,const long &lparam,const double &dparam,const string &sparam)
 {
+   if(EvoShowContext && EvoHelpEvent(id,lparam,sparam)) { RenderMonitor(true); return; }
    if(id==CHARTEVENT_OBJECT_CLICK && (StringFind(sparam,"EVO_CONTEXT_TAB_")==0 || sparam=="EVO_CONTEXT_SIM"))
    {
       evoLevelsExpanded=false; ObjectsDeleteAll(0,"EVO_CONTEXT_");

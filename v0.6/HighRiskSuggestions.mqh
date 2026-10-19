@@ -1,7 +1,7 @@
 ﻿#ifndef EVO_HIGH_RISK_SUGGESTIONS
 #define EVO_HIGH_RISK_SUGGESTIONS
 input group "Sugerencias Alto Riesgo v1.13 - NO ejecutan entradas"
-input bool EvoSuggest113=true; // Detectar patrones tecnicos y abrir simulador
+input bool EvoSuggest113=true; // Preparar sugerencias solo dentro de SIMULAR, sin cambiar de pantalla
 input double EvoSuggest113TrendSL=1.5; // SL ATR en tendencia, como v1.13
 input double EvoSuggest113LateralSL=1.5; // SL ATR en lateral, como v1.13
 input double EvoSuggest113RR=2.0; // RR objetivo (minimo 1.20 como v1.13)
@@ -33,8 +33,11 @@ void Evo113Distances(const double atr,const bool trend,const double point,double
 void Evo113Poll(const bool valid,const EvoSnapshot &live)
 {
    if(!EvoSuggest113 || !EvoShowContext || !valid) return;
-   // Preserve manual edits while the user is viewing an active simulation.
-   if(evoSimulationView && evoSimActive) return;
+   // Only an explicit SIMULAR click opens that view. Never steal focus or edits.
+   if(!evoSimulationView || evoSimActive || evoDemandView || evoPanelMinimized || evoHelpOpen) return;
+#ifdef EVO_SIMULATOR_V08
+   if(evo08TargetKind>0) return;
+#endif
    EvoSnapshot candidate=live;
    // Match v1.13's mixed indexing deliberately: closed price/levels when configured,
    // live ATR/ADX/RSI/EMAs. Do not substitute the monitor's closed display snapshot.
@@ -59,12 +62,13 @@ void Evo113Poll(const bool valid,const EvoSnapshot &live)
    double risk=0,gain=0; string error="";
    if(!EvoSimValues(risk,gain,error)) { evoSimActive=false; EvoJournal("SUGERENCIA_113_INVALIDA",0,error); return; }
    evo113PublishedMask|=side>0?1:2;
-   evoDemandView=false; evoPanelMinimized=false; evoSimulationView=true;
-   ObjectsDeleteAll(0,"EVO_CONTEXT_"); ObjectsDeleteAll(0,"EVO_DEMAND_"); EvoDeleteSRLines();
    EvoSetChartLinesVisible(true); EvoSimLines();
+#ifdef EVO_SIMULATOR_V08
+   Evo08Init(); evo08ATR=candidate.atr[0]; Evo08SyncDistances();
+#endif
    evoSimOrigin="Alto Riesgo v1.13 | "+candidate.regime+" | "+TimeToString(TimeCurrent(),TIME_DATE|TIME_SECONDS);
    evoSimMessage="SUGERENCIA "+(side>0?"COMPRA":"VENTA")+" | revisar niveles antes de CONFIRMAR";
-   EvoJournal("SUGERENCIA_113_SIMULADA",0,evoSimOrigin+StringFormat("; lado=%d; entrada=%.*f; SL=%.*f; TP=%.*f; lotes=%.2f; riesgo=%.2f; objetivo=%.2f",side,_Digits,evoSimEntry,_Digits,evoSimSL,_Digits,evoSimTP,EvoSimulationLots,risk,gain));
+   EvoJournal("SUGERENCIA_113_SIMULADA",0,evoSimOrigin+StringFormat("; lado=%d; entrada=%.*f; SL=%.*f; TP=%.*f; lotes=%.2f; riesgo=%.2f; objetivo=%.2f",side,_Digits,evoSimEntry,_Digits,evoSimSL,_Digits,evoSimTP,EvoSimLots(),risk,gain));
    Print(evoSimOrigin," | ",evoSimMessage);
 }
 #endif
